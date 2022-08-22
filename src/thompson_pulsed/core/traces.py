@@ -800,4 +800,4 @@ class Frequency_Sequence:
         return( cls(f, **kwargs) )
         
 class SequenceLoadException(OSError):
-    pass
+    pas
