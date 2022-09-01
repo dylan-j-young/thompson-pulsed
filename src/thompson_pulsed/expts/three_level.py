@@ -397,13 +397,20 @@ class Data:
             cref_mag2_raw = cref_phasor.mag().V**2
             cref_mag2_max = np.max(cref_mag2_raw, axis=-1)
             threshold_filter = (cref_mag2_raw > 0.5 * cref_mag2_max[...,None]).astype(int)
-            cref_mag2 = threshold_filter * cref_mag2_raw # small magnitudes set to 0
 
-            cref_phase = cref_phasor.phase(unwrap=False)
+            # use circular mean instead to extract the phase information
+            # ref: https://en.wikipedia.org/wiki/Circular_mean
+            cref_phase_real = cref_phasor.V.real
+            cref_phase_imag = cref_phasor.V.imag
 
-            # Calcluate weighted average, allowing for weights to be different between shots
-            y, w = cref_phase.V, cref_mag2
-            cref_avg_phase = np.sum(y*w, axis=-1) / np.sum(w, axis=-1)
+            # throw away point have low signal to noise
+            cref_phase_real *= threshold_filter
+            cref_phase_imag *= threshold_filter
+
+            cref_phase_real_avg = np.average(cref_phase_real, axis=-1)
+            cref_phase_imag_avg = np.average(cref_phase_imag, axis=-1)
+
+            cref_avg_phase = np.angle(cref_phase_real_avg + 1j * cref_phase_imag_avg) % (2 * np.pi)
 
             # Correct cavity phasors and average phasors within single sequences
             cav_phasor_corr_V = cav_phasor_raw.V * np.exp(-1j * cref_avg_phase[..., None])
