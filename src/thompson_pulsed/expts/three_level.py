@@ -21,6 +21,31 @@ Define object classes for experiment
 class Experiment:
     """
     Root object of a particular instance of the experiment.
+
+    ...
+
+    Attributes
+    ----------
+    has_postmeasure : bool
+        Whether the sequence has the cavity probe postmeasure .
+    has_premeasure : bool
+        Whether the sequence has the cavity probe premeasure.
+    params : Parameters (Class)
+        Experimental Parameters.
+    sequences: list of Sequence (Class)
+        i.e. [Sequence 1, Sequence 2, Sequence 3,...]
+        Each sequence corresponds to a txt file each loading sequence produces.
+    
+
+    Methods
+    -------
+    load_sequence(file)
+        Loads a text file from a single sequence into the experiment.
+    preprocess(n_seqs = None, load = 'newest', premeasure = 0,
+                   premeasure_interleaved = False, postmeasure = 0,
+                   n_warmups = 0, avg_fi_shots = True)
+        Given loaded sequences, preprocess data contained inside and store in
+        expt.data.
     """
     def __init__(self, params):
         self.sequences = []
@@ -201,6 +226,7 @@ class Experiment:
                             if self.has_postmeasure else None
 
         # Process postmeasure. fb.shape = (seq,)
+        # bare cavity frequency
         fb = None
         if self.has_postmeasure:
             fb_seqs = data_postmeasure.track_cav_frequency_iq(t_bin=t_bin, avg_sequences=False)
@@ -222,6 +248,7 @@ class Experiment:
                             if self.has_premeasure else None
         
         # Process premeasure. fi.shape = (seq,)
+        # initial cavity frequency
         fi = None
         if self.has_premeasure:
             fi_seqs = data_premeasure.track_cav_frequency_iq(t_bin=t_bin, avg_sequences=False, use_cref=avg_fi_shots, avg_shots=avg_fi_shots)
@@ -240,10 +267,36 @@ class Experiment:
         # Assign to data object
         data = Data(t, runs['cav'], runs['atom'], self.params, fi=fi, fb=fb, \
                             cref_runs=runs['cref'], spcm_runs=runs['spcm'])
-
+            
         return( data, data_premeasure, data_postmeasure )
             
 class Parameters:
+    """
+    Contains the experimental parameters
+
+    ...
+
+    Attributes
+    ----------
+    t_run : float
+        Length of each shot (s)
+    t_drive : float
+        Duration of Rabi drive (s)
+    t_cav_pulse : float
+        Cycle time of cavity probe, i.e. the cavity is whacked every 
+        t_cav_pulse (s).
+    f0_cav : float
+        Effective "osillation" frequency (Hz) that oscilloscope acquires for 
+        cavity probe.
+    f0_atom : float
+        Effective "osillation" frequency (Hz) that oscilloscope acquires for 
+        atomic probe.
+    dt : float  
+        Time difference (s) between each data point that scope samples.
+    Methods
+    -------
+    None.
+    """
     def __init__(self):
         self.t_run = None
         self.t_drive = None
@@ -260,7 +313,49 @@ class Parameters:
 
 class Data:
     """
-    Stores preprocessed data and contains methods by which to process the contained data.
+    Stores preprocessed data. Accessed via the parent Experiment object. 
+
+    ...
+
+    Attributes
+    ----------
+    atom_runs : Time_Multitrace (Class)
+        Atomic probe data.
+    cav_runs : Time_Multitrace (Class)
+        Cavity probe data.
+    cref_runs : Time_Multitrace (Class)
+        RF reference tone data [for calibration of cavity probe phase].
+    fb : ndarray of shape (seq,)
+        Bare cavity frequency.
+    fi : ndarray of shape (seq,)
+        Initial cavity frequency with all atoms in the ground states.
+    params : Parameters (Class)
+        Experimental Parameters.
+    spcm_runs : Time_Multitrace (Class)
+        TO BE IMPLEMENTED.
+    t : ndarray
+        Time coodinates of dynamics of one shot.
+
+    
+    -------
+    subset(idx)
+        Returns a Data object which is sliced along the sequence axis with
+        the given 1D numpy array idx.
+
+    track_cav_frequency_iq(f_demod = None, align = True, avg_sequences = True,
+                               ignore_pulse_bins = True, use_cref = True, 
+                               avg_shots = True)
+        IQ demodulates cavity time traces, bins them, and fits their phase(t)
+        with a linear regression to estimate instantaneous frequency. Multiple
+        shots give statistics on these bins.
+
+    demod_atom_trace(t_align=None, collapse=True)
+        IQ demodulates atom time traces and phase-aligns them at a specified
+        time.
+
+    avg_spcm_traces
+        NOT IMPLEMENTED.
+
     """
     def __init__(self, t, cav_runs, atom_runs, params, fi=None, fb=None, cref_runs=None, spcm_runs=None):
         self.t = t
@@ -282,6 +377,17 @@ class Data:
             if (spcm_runs is not None) else None
 
     def _seq_cav_probe_mag(self, f_demod = None, avg_shots=True):
+        """
+        Compute the amplitude of the demodulated phasor (Time_Multitrace).
+        Returns in (seq, t) if avg_shots is True, and (seq, run, t) otherwise.
+
+        Parameters
+        ----------
+        f_demod : float, optional
+            Frequency to demodulate signal by. Units are period units in t. 
+        avg_shots : boolean, optional
+            Specifies whether or not to compute the average of the magnitude.
+        """
         if self.cav_runs is None:
             raise Exception('cav_runs was not set!')
         
