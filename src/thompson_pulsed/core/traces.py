@@ -250,8 +250,8 @@ class Time_Multitrace(MT):
         if hasattr(self, 'dV'):
             if (type(dV) != type(None)) and (type(dV) != type(self.V)):
                 raise( TypeError(f"dV must have type {type(None)} or type {type(self.V)} to write to this object. It currently has type {type(dV)}.") )
-            if (dV is not None) and (dV.shape != self.V.shape):
-                raise( TypeError(f"dV must have shape {self.V.shape} to write to this object. It currently has shape {dV.shape}.") )
+            if (dV is not None) and (dV.shape != V.shape):
+                raise( TypeError(f"dV must have shape {V.shape} to write to this object. It currently has shape {dV.shape}.") )
             return( type(self)(self.t, V, dV=dV) )
         return( type(self)(self.t, V) )
 
